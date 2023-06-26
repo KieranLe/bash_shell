@@ -1,0 +1,320 @@
+/*
+
+    Name:   Khanh Le
+    ID:     1001741583
+    
+ */
+
+// The MIT License (MIT)
+// 
+// Copyright (c) 2016 Trevor Bakker 
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+
+#define _GNU_SOURCE
+
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <signal.h>
+
+#define WHITESPACE " \t\n"      // We want to split our command line up into tokens
+                                // so we need to define what delimits our tokens.
+                                // In this case  white space
+                                // will separate the tokens on our command line
+
+#define MAX_COMMAND_SIZE 255    // The maximum command-line size
+
+#define MAX_NUM_ARGUMENTS 10     // Mav shell only supports ten arguments
+
+
+// Requirement 11
+// This fucncion is used to print out a list of 15 recent PIDs,
+// it takes an array of int. 
+// If there are less than 15 PIDs, it will only print out those current recent PIDs.
+// Since the array will be initialized with 0 (implement in main function),
+// we will skip any element in the array with value = 0 (default value)
+// and only print out actual PIDs of current processes.
+void printPIDHistory(int pidHistory[15])
+{
+    for( int i = 0; i < 15; i++ )
+    {
+        if( pidHistory[i] != 0 )
+        {
+            printf( "[%d]: %d\n", i, pidHistory[i] );
+        }
+    }
+}
+
+// Requirement 12
+// This function is used to print out a list of 15 recent commands,
+// it take a pointer to an array of char
+// If there are less than 15 commands, it will only print out current recent commands.
+// We will ignore any element in the array with a string "0" (implement in main function).
+// and only printf out actual commands input by user.
+void printCommandHistory(char *commandHistory[15])
+{
+    for( int i = 0 ; i < 15; i++ )
+    {
+        if( strcmp(commandHistory[i], "0") != 0 )
+        {
+            printf( "[%d]: %s", i, commandHistory[i] );
+        }
+    }
+}
+
+int main()
+{
+
+  int   pidHistory[15];     //int array to store 15 recent processes PIDs
+  int   count = 0;          //number of PIDs
+  int   stringCount = 0;    //number of commmands
+  int   i = 0;      
+  char  nth[2];             //variable to store '!n' command
+  int   nNum;               //variable to store 'n' in '!n' as integer
+    
+  // Array to store a list of the last 15 commands entered by user.
+  // Dynamically allocated memory space for array of string.
+  // Use memcpy to initialize "0" for all string in the array.
+  // Initilized "0" for all string will be used as a condition to print out 
+  // all the commands input by user in the [printCommandHistory] function
+  char *commandHistory[15];
+  for( i = 0 ; i < 15; i++ ) 
+  {
+    commandHistory[i] = malloc( MAX_COMMAND_SIZE * sizeof(char) );
+    memcpy( commandHistory[i], "0", strlen("0") );
+  }
+  
+  // Array to store a list of the last 15 PIDs generated.
+  // Initialized value 0 for the array of the last 15 processes.
+  // By initialized all element in array with 0, 
+  // we will use this as a condition for [printPIDHistory] function
+  // to print out all the current PIDs generated.
+  for( i = 0 ; i < 15; i++ )
+  {
+    pidHistory[i] = 0;
+  }
+
+
+  char * command_string = (char*) malloc( MAX_COMMAND_SIZE );
+  
+
+  while( 1 )
+  {
+    // Print out the msh prompt
+    printf ("msh> ");
+
+    // Read the command from the commandline.  The
+    // maximum command that will be read is MAX_COMMAND_SIZE
+    // This while command will wait here until the user
+    // inputs something since fgets returns NULL when there
+    // is no input
+    while( !fgets (command_string, MAX_COMMAND_SIZE, stdin) );
+    
+    // Requirement 11
+    // Reset the count for [pidHistory] value when it reaches 15, 
+    // so it can replace the oldest value with the newest
+    // in the [pidHistory] array.
+    if( count == 15 )
+    {
+        count = 0;
+    }
+    // Requirement 12
+    // Reset the count for [commandHistory] value when it reaches 15, 
+    // so it can replace the oldest value with the newest 
+    // in the [commandHistory] array
+    if( stringCount == 15 )
+    {
+        stringCount = 0;
+    }
+    
+    // Requirement 12: !n
+    // Check to see if [nth] command exist by comparing the [nNum] with the current [stringCount]
+    // if it exists, copy the command in the [n] location in the array to the [command_string]
+    // now, the program will continue run with the command 
+    // from the [n] location instead of waiting for user input.
+    // Even though we initialized all element in the array with a default value,
+    // we only compare the [nNUm] with current [stringCount]
+    // and [stringCount] can only increase if user enter an input.
+    strcpy(nth, command_string);
+    if( nth[0] == '!' )
+    {
+        nNum = ( nth[1] - '0' );
+        if( nNum > stringCount )
+        {
+            printf("Command not in history. \n");
+            continue;
+        }
+        else
+        {
+            // Copy memory block of the [n] command in the array to the current command_string
+            // so the program can continue to tokenize the string and repeat the procedure 
+            memcpy( command_string, commandHistory[nNum], strlen(commandHistory[nNum] + 1) );          
+        }
+    }
+    
+    // Requirement 12
+    // This will store the current command input by user into an array 
+    // so it can be displayed using the 'history' command 
+    // and also a part of '!n' command requirement
+    memcpy(commandHistory[stringCount], command_string, strlen(command_string));
+    stringCount++;
+
+    // Requirement 6
+    // user enter blank line, print another prompt and accept new input
+    if( strcmp(command_string, "\n") == 0 )
+    {
+        continue;
+    }    
+    
+
+    /* Parse input */
+    char *token[MAX_NUM_ARGUMENTS];
+
+    int   token_count = 0;                                 
+                                                           
+    // Pointer to point to the token
+    // parsed by strsep
+    char *argument_ptr;                                         
+                                                           
+    char *working_string  = strdup( command_string );                
+
+    // we are going to move the working_string pointer so
+    // keep track of its original value so we can deallocate
+    // the correct amount at the end
+    char *head_ptr = working_string;
+
+    // Tokenize the input strings with whitespace used as the delimiter
+    while ( ( (argument_ptr = strsep(&working_string, WHITESPACE ) ) != NULL) && 
+              (token_count<MAX_NUM_ARGUMENTS))
+    {
+      token[token_count] = strndup( argument_ptr, MAX_COMMAND_SIZE );
+      if( strlen( token[token_count] ) == 0 )
+      {
+        token[token_count] = NULL;
+      }
+        token_count++;
+    }
+  
+//-------------------------Code Start Here-------------------------//
+    // Requirement 5
+    // Shell will exit when the user input is "quit" or "exit"
+    if( (strcmp(token[0], "quit") == 0) || (strcmp(token[0], "exit") == 0) )
+    {
+        exit(EXIT_SUCCESS);
+    }
+    // Use chdir() for 'cd' command instead of exec,
+    // also store the PID into the [pidHistory] array
+    else if( strcmp(token[0], "cd") == 0 )
+    {
+        chdir(token[1]);     
+        pidHistory[count] = getpid();
+        count++;
+    }
+    // Requirement 11
+    // Since the array was initialized with 0,
+    // we will skip any element in the array with value = 0
+    // and only print out actual PIDs of current processes.
+    // Function [printPIDHistory] is called here and will return
+    // a list of PIDS, up to 15
+    else if( strcmp(token[0], "pidhistory") == 0 )
+    {  
+        printPIDHistory(pidHistory);
+
+    }
+    // Requirement 12
+    // Since the array was initialized with "0"
+    // we will ignore any element in the array with value = 0
+    // and only print out actual commands history.
+    // Function [printCommandHistory] is called here and will return
+    // a list of commands history, up to 15
+    else if( strcmp(token[0], "history") == 0 )
+    {
+        printCommandHistory(commandHistory);
+    }
+    else
+    {
+        pid_t child_pid = fork();    
+        
+        // fork() here will return the ID of the new processes
+        // store it in the array and increament the count value
+        pidHistory[count] = child_pid; 
+        count++;
+           
+        
+        if( child_pid == 0 )
+        {
+            // Requirement 8
+            // Create 3 path so execl can access and look for the any command support by shell.
+            // We concatenate the default path with user input in token[0].
+            // Check execl of each path
+            char path_1[100];
+            char path_2[100];
+            char path_3[100];
+            
+            strcpy(path_1, "/usr/local/bin/");
+            strcpy(path_2, "/usr/bin/");
+            strcpy(path_3, "/bin/");
+            
+            strcat(path_1, token[0]);
+            strcat(path_2, token[0]);
+            strcat(path_3, token[0]);
+              
+            int ret_1 = execl(path_1, token[0] ,token[1], token[2], token[3], token[4], token[5], 
+            token[6], token[7], token[8], token[9], NULL, NULL, NULL, NULL);
+        
+            // If first path is fail, continue to the second path and so on
+            if( ret_1 == -1 )
+            {                                                
+                int ret_2 = execl(path_2, token[0],token[1], token[2], token[3], token[4], token[5], 
+                token[6], token[7], token[8], token[9], NULL, NULL, NULL, NULL);
+         
+                if( ret_2 == -1 )
+                {                                
+                    int ret_3 = execl(path_2, token[0] ,token[1], token[2], token[3], token[4], token[5], 
+                    token[6], token[7], token[8], token[9], NULL, NULL, NULL, NULL);                  
+                                  
+                    // When the command cannot be found     
+                    if( ret_3 == -1 )
+                    {
+                        // Requirement 2
+                        printf("%s: Command not found.\n\n", token[0]);                      
+                    }
+                }
+           
+            }
+        }
+        else
+        {
+            int status;
+            wait( & status );
+        }            
+    }
+ 
+    free( head_ptr );
+
+  }
+  return 0;
+  // e2520ca2-76f3-11ec-90d6-0242ac120003
+}
